@@ -112,13 +112,19 @@ acceptance: ## Run all acceptance tests
 	}; \
 	trap cleanup EXIT; \
 	cp -R . "$$ACCEPTANCE_WORKDIR"; \
+	cp slgoagent "$$ACCEPTANCE_WORKDIR"/slgoagent; \
+	cp slcli "$$ACCEPTANCE_WORKDIR"/slcli; \
+	cp buildSessionId.txt "$$ACCEPTANCE_WORKDIR"/buildSessionId.txt; \
 	cd "$$ACCEPTANCE_WORKDIR" && \
-	go run acceptance/coverage/coverage.go && \
 	$(MAKE) build && \
 	export COVERAGE_FILEPATH="$$ACCEPTANCE_WORKDIR"; \
 	export COVERAGE_FILENAME="-acceptance"; \
-	cd acceptance && go test -coverprofile "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" -timeout $(ACCEPTANCE_TIMEOUT) ./... && \
-	go run -modfile "$$ACCEPTANCE_WORKDIR/tools/go.mod" github.com/wadey/gocovmerge "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" > "$(ROOT_DIR)/coverage-acceptance.out"
+	export SEALIGHTS_LOG_LEVEL="none"; \
+	export SL_BUILD_SESSION_ID="$$(cat buildSessionId.txt)"; \
+	echo "[Debug] SL_BUILD_SESSION_ID=$${SL_BUILD_SESSION_ID}"; \
+	cd acceptance && SEALIGHTS_LOG_LEVEL=none go test -coverprofile "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" -timeout $(ACCEPTANCE_TIMEOUT) ./... && \
+	go run -modfile "$$ACCEPTANCE_WORKDIR/tools/go.mod" github.com/wadey/gocovmerge "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" > "$(ROOT_DIR)/coverage-acceptance.out" && \
+	./slcli test upload-reports --bsid buildSessionId.txt
 
 # Add @focus above the feature you're hacking on to use this
 # (Mainly for use with the feature-% target below)
