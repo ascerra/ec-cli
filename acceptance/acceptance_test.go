@@ -1,24 +1,9 @@
-// Copyright The Enterprise Contract Contributors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// SPDX-License-Identifier: Apache-2.0
-
 package acceptance
 
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,45 +28,35 @@ import (
 	"github.com/enterprise-contract/ec-cli/acceptance/wiremock"
 )
 
-// NOTE: flags need to be initialized with the package in order to be recognized
-// a flag that can be set by running the test with "-args -persist" command line options
 var persist = flag.Bool("persist", false, "persist the stubbed environment to facilitate debugging")
-
-// run acceptance tests with the persisted environment
 var restore = flag.Bool("restore", false, "restore last persisted environment")
-
 var noColors = flag.Bool("no-colors", false, "disable colored output")
-
-// specify a subset of scenarios to run filtering by given tags
 var tags = flag.String("tags", "", "select scenarios to run based on tags")
-
-// random seed to use
 var seed = flag.Int64("seed", -1, "random seed to use for the tests")
 
-// initializeScenario adds all steps and registers all hooks to the
-// provided godog.ScenarioContext
-func initializeScenario(sc *godog.ScenarioContext) {
-	cli.AddStepsTo(sc)
-	crypto.AddStepsTo(sc)
-	git.AddStepsTo(sc)
-	image.AddStepsTo(sc)
-	kubernetes.AddStepsTo(sc)
-	registry.AddStepsTo(sc)
-	rekor.AddStepsTo(sc)
-	tekton.AddStepsTo(sc)
-	wiremock.AddStepsTo(sc)
-	pipeline.AddStepsTo(sc)
-	conftest.AddStepsTo(sc)
-	tuf.AddStepsTo(sc)
+var junitReportPath = os.Getenv("JUNIT_REPORT")
 
-	sc.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+func InitializeScenario(ctx *godog.ScenarioContext) {
+	cli.AddStepsTo(ctx)
+	crypto.AddStepsTo(ctx)
+	git.AddStepsTo(ctx)
+	image.AddStepsTo(ctx)
+	kubernetes.AddStepsTo(ctx)
+	registry.AddStepsTo(ctx)
+	rekor.AddStepsTo(ctx)
+	tekton.AddStepsTo(ctx)
+	wiremock.AddStepsTo(ctx)
+	pipeline.AddStepsTo(ctx)
+	conftest.AddStepsTo(ctx)
+	tuf.AddStepsTo(ctx)
+
+	ctx.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 		logger, ctx := log.LoggerFor(ctx)
 		logger.Name(sc.Name)
-
 		return context.WithValue(ctx, testenv.Scenario, sc), nil
 	})
 
-	sc.After(func(ctx context.Context, scenario *godog.Scenario, scenarioErr error) (context.Context, error) {
+	ctx.After(func(ctx context.Context, scenario *godog.Scenario, scenarioErr error) (context.Context, error) {
 		_, err := testenv.Persist(ctx)
 		return ctx, err
 	})
@@ -93,29 +68,33 @@ func initializeSuite(ctx context.Context) func(*godog.TestSuiteContext) {
 	}
 }
 
-// setupContext creates a Context prepopulated with the *testing.T and *persist
-// values
 func setupContext(t *testing.T) context.Context {
 	ctx := context.WithValue(context.Background(), testenv.TestingT, t)
 	ctx = context.WithValue(ctx, testenv.PersistStubEnvironment, *persist)
 	ctx = context.WithValue(ctx, testenv.RestoreStubEnvironment, *restore)
 	ctx = context.WithValue(ctx, testenv.NoColors, *noColors)
-
 	return ctx
 }
 
-// TestFeatures launches all acceptance test scenarios running them
-// in random order in parallel threads equal to the number of available
-// cores
 func TestFeatures(t *testing.T) {
-	// change the directory to repository root, makes for easier paths
-	if err := os.Chdir(".."); err != nil {
-		t.Error(err)
+	flag.Parse()
+
+	if junitReportPath != "" {
+		fmt.Println("📄 Will write JUnit report to:", junitReportPath)
 	}
 
-	featuresDir, err := filepath.Abs("features")
+	featuresDir, err := filepath.Abs("../features")
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
+	}
+
+	files, err := filepath.Glob(filepath.Join(featuresDir, "*.feature"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("🔍 Found %d feature files in %s\n", len(files), featuresDir)
+	if len(files) == 0 {
+		t.Fatal("❌ No feature files found")
 	}
 
 	ctx := setupContext(t)
@@ -129,16 +108,35 @@ func TestFeatures(t *testing.T) {
 		DefaultContext: ctx,
 		Tags:           *tags,
 		NoColors:       *noColors,
+		Output:         os.Stdout,
+	}
+
+	if junitReportPath != "" {
+		f, err := os.Create(junitReportPath)
+		if err != nil {
+			t.Fatalf("failed to create JUnit report: %v", err)
+		}
+		defer f.Close()
+		opts.Format = "junit"
+		opts.Output = f
 	}
 
 	suite := godog.TestSuite{
-		ScenarioInitializer:  initializeScenario,
-		TestSuiteInitializer: initializeSuite(ctx),
-		Options:              &opts,
+		Name:                "ec-cli",
+		ScenarioInitializer: InitializeScenario,
+		Options:             &opts,
 	}
 
 	if suite.Run() != 0 {
-		t.Fatal("failure in acceptance tests")
+		t.Fail()
+	}
+
+	if junitReportPath != "" {
+		if _, err := os.Stat(junitReportPath); os.IsNotExist(err) {
+			t.Logf("⚠️ JUnit report NOT created at: %s", junitReportPath)
+		} else {
+			t.Logf("✅ JUnit report created at: %s", junitReportPath)
+		}
 	}
 }
 
