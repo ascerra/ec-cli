@@ -75,6 +75,7 @@ func registerPURLParse() {
 					{Key: "namespace", Value: types.S},
 					{Key: "name", Value: types.S},
 					{Key: "version", Value: types.S},
+					{Key: "change-in-code", Value: types.S},
 					{Key: "qualifiers", Value: types.NewArray(
 						nil, types.NewObject(
 							[]*types.StaticProperty{
