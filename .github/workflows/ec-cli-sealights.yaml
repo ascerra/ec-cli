@@ -39,8 +39,8 @@ jobs:
 
   Initialize:
     runs-on: ubuntu-latest
-    # env:
-      # SEALIGHTS_LOG_LEVEL: none
+    env:
+      SEALIGHTS_LOG_LEVEL: none
     outputs:
       bsid: ${{ steps.sealights-scan.outputs.bsid }}
     steps:
@@ -167,7 +167,7 @@ jobs:
     needs: Initialize
     env:
       BSID: ${{ needs.Initialize.outputs.bsid }}
-      # SEALIGHTS_LOG_LEVEL: none
+      SEALIGHTS_LOG_LEVEL: none
       SEALIGHTS_CONNECTION_TIMEOUT: 120s
     steps:
       - name: Restore workspace
