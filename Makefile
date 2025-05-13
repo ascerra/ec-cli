@@ -123,12 +123,25 @@ acceptance: ## Run all acceptance tests
 	trap cleanup EXIT; \
 	cp -R . "$$ACCEPTANCE_WORKDIR"; \
 	cd "$$ACCEPTANCE_WORKDIR" && \
-	go run acceptance/coverage/coverage.go && \
 	$(MAKE) build && \
 	export COVERAGE_FILEPATH="$$ACCEPTANCE_WORKDIR"; \
 	export COVERAGE_FILENAME="-acceptance"; \
-	cd acceptance && go test -coverprofile "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" -timeout $(ACCEPTANCE_TIMEOUT) ./... && \
-	go run -modfile "$$ACCEPTANCE_WORKDIR/tools/go.mod" github.com/wadey/gocovmerge "$$ACCEPTANCE_WORKDIR/coverage-acceptance.out" > "$(ROOT_DIR)/coverage-acceptance.out"
+	cd acceptance && SEALIGHTS_LOG_LEVEL=none go run -modfile "$$ACCEPTANCE_WORKDIR/tools/go.mod" gotest.tools/gotestsum --junitfile "$(ROOT_DIR)/junit-acceptance.xml" -- -parallel 1 -timeout $(ACCEPTANCE_TIMEOUT) ./...
+
+acceptance-sealights: ## Run all acceptance tests with sealights integration
+	@ACCEPTANCE_WORKDIR="$$(mktemp -d)"; \
+	cleanup() { \
+		cp "$${ACCEPTANCE_WORKDIR}"/features/__snapshots__/* "$(ROOT_DIR)"/features/__snapshots__/; \
+	}; \
+	trap cleanup EXIT; \
+	cp -R . "$$ACCEPTANCE_WORKDIR"; \
+	cd "$$ACCEPTANCE_WORKDIR" && \
+	$(MAKE) build && \
+	export COVERAGE_FILEPATH="$$ACCEPTANCE_WORKDIR"; \
+	export COVERAGE_FILENAME="-acceptance"; \
+	ls -la; \
+	./slcli scan --tests-runner --workspacepath "acceptance" --path-to-scanner ./slgoagent --scm none; \
+	cd acceptance && SEALIGHTS_LOG_LEVEL=none go run -modfile "$$ACCEPTANCE_WORKDIR/tools/go.mod" gotest.tools/gotestsum --junitfile "$(ROOT_DIR)/junit-acceptance.xml" -- -parallel 1 -timeout $(ACCEPTANCE_TIMEOUT) ./...
 
 acceptance-sealights: ## Run all acceptance tests with sealights integration
 	@ACCEPTANCE_WORKDIR="$$(mktemp -d)"; \
