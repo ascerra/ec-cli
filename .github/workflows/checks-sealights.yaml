@@ -120,6 +120,7 @@ jobs:
           echo "[Sealights] Running the SeaLights scan"
           ./slcli scan --bsid buildSessionId.txt  --path-to-scanner ./slgoagent --workspacepath ./ --scm git --scmBaseUrl https://github.com/enterprise-contract/ec-cli.git --scmVersion “0” --scmProvider github
           echo bsid=$(< buildSessionId.txt) | tee -a "$GITHUB_OUTPUT"
+
       - name: clean all SeaLights secret stuff
         run: |
           echo "[Sealights] Cleaning up after SeaLights run"
